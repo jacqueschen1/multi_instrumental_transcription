@@ -226,9 +226,12 @@ class Regress_onset_offset_frame_velocity_CRNN(nn.Module):
         x = self.spectrogram_extractor(input)   # (batch_size, 1, time_steps, freq_bins)
         x = self.logmel_extractor(x)    # (batch_size, 1, time_steps, mel_bins)
 
+        print(x.shape)
         x = x.transpose(1, 3)
+        print("pre batch", x.shape)
         x = self.bn0(x)
         x = x.transpose(1, 3)
+        print("post batch", x.shape)
 
         frame_output = self.frame_model(x)  # (batch_size, time_steps, classes_num)
         reg_onset_output = self.reg_onset_model(x)  # (batch_size, time_steps, classes_num)

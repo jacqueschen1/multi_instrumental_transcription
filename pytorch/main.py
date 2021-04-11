@@ -198,33 +198,33 @@ def train(args):
     for batch_data_dict in train_loader:
         
         # Evaluation 
-        if iteration % 5000 == 0:# and iteration > 0:
-            logging.info('------------------------------------')
-            logging.info('Iteration: {}'.format(iteration))
+        # if iteration % 5000 == 0:# and iteration > 0:
+        #     logging.info('------------------------------------')
+        #     logging.info('Iteration: {}'.format(iteration))
 
-            train_fin_time = time.time()
+        #     train_fin_time = time.time()
 
-            evaluate_train_statistics = evaluator.evaluate(evaluate_train_loader)
-            validate_statistics = evaluator.evaluate(validate_loader)
-            test_statistics = evaluator.evaluate(test_loader)
+        #     evaluate_train_statistics = evaluator.evaluate(evaluate_train_loader)
+        #     validate_statistics = evaluator.evaluate(validate_loader)
+        #     test_statistics = evaluator.evaluate(test_loader)
 
-            logging.info('    Train statistics: {}'.format(evaluate_train_statistics))
-            logging.info('    Validation statistics: {}'.format(validate_statistics))
-            logging.info('    Test statistics: {}'.format(test_statistics))
+        #     logging.info('    Train statistics: {}'.format(evaluate_train_statistics))
+        #     logging.info('    Validation statistics: {}'.format(validate_statistics))
+        #     logging.info('    Test statistics: {}'.format(test_statistics))
 
-            statistics_container.append(iteration, evaluate_train_statistics, data_type='train')
-            statistics_container.append(iteration, validate_statistics, data_type='validation')
-            statistics_container.append(iteration, test_statistics, data_type='test')
-            statistics_container.dump()
+        #     statistics_container.append(iteration, evaluate_train_statistics, data_type='train')
+        #     statistics_container.append(iteration, validate_statistics, data_type='validation')
+        #     statistics_container.append(iteration, test_statistics, data_type='test')
+        #     statistics_container.dump()
 
-            train_time = train_fin_time - train_bgn_time
-            validate_time = time.time() - train_fin_time
+        #     train_time = train_fin_time - train_bgn_time
+        #     validate_time = time.time() - train_fin_time
 
-            logging.info(
-                'Train time: {:.3f} s, validate time: {:.3f} s'
-                ''.format(train_time, validate_time))
+        #     logging.info(
+        #         'Train time: {:.3f} s, validate time: {:.3f} s'
+        #         ''.format(train_time, validate_time))
 
-            train_bgn_time = time.time()
+        #     train_bgn_time = time.time()
         
         # Save model
         if iteration % 20000 == 0:
@@ -250,8 +250,9 @@ def train(args):
          
         model.train()
         batch_output_dict = model(batch_data_dict['waveform'])
-
+        print("hello")
         loss = loss_func(model, batch_output_dict, batch_data_dict)
+        print("hello")
 
         print(iteration, loss)
 
