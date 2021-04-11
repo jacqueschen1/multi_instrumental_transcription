@@ -219,7 +219,7 @@ def train(args):
     for batch_data_dict in train_loader:    
     
         # Evaluation 
-        if iteration % 5000 == 0:# and iteration > 0:
+        if iteration % 2500 == 0:# and iteration > 0:
             logging.info('------------------------------------')
             logging.info('Iteration: {}'.format(iteration))
 
