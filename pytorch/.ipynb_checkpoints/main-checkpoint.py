@@ -26,6 +26,9 @@ from losses import get_loss_func
 from evaluate import SegmentEvaluator
 import config
 
+import matplotlib
+matplotlib.use('Agg')
+
 
 def train(args):
     """Train a piano transcription system.
