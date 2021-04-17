@@ -178,10 +178,10 @@ class PianoTranscription(object):
             # assert segment_samples % 4 == 0
 
             y = []
-            y.append(x[0, 0 : int(segment_samples * 0.8)])
+            y.append(x[0, 0 : 188])
             for i in range(1, N - 1):
-                y.append(x[i, int(segment_samples * 0.2) : int(segment_samples * 0.8)])
-            y.append(x[-1, int(segment_samples * 0.2) :])
+                y.append(x[i, 63 : 188])
+            y.append(x[-1, 63:])
             y = np.concatenate(y, axis=0)
             return y
 

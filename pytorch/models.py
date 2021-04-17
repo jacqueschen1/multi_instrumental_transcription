@@ -113,28 +113,17 @@ class AcousticModelCRnn8Dropout(nn.Module):
         self.fc5 = nn.Linear(midfeat, 768, bias=False)
         self.bn5 = nn.BatchNorm1d(768, momentum=momentum)
 
-        hyparams = Map()
-        hyparams['hidden_size'] = 128
-        hyparams['total_key_depth'] = 128
-        hyparams['total_value_depth'] = 128
-        hyparams['num_heads'] = 8
-        hyparams['block_length'] = 128
-        hyparams['attn_type'] = "local_1d"
-        hyparams['filter_size'] = 128
-        hyparams['dropout'] = 0.3
-        self.attn = DecoderLayer(hyparams)
+        self.gru = nn.GRU(input_size=768, hidden_size=256, num_layers=2, 
+            bias=True, batch_first=True, dropout=0., bidirectional=True)
 
-        # self.gru = nn.GRU(input_size=768, hidden_size=256, num_layers=2, 
-        #     bias=True, batch_first=True, dropout=0., bidirectional=True)
-
-        self.fc = nn.Linear(768, classes_num, bias=True)
+        self.fc = nn.Linear(512, classes_num, bias=True)
         
         self.init_weight()
 
     def init_weight(self):
         init_layer(self.fc5)
         init_bn(self.bn5)
-        # init_gru(self.gru)
+        init_gru(self.gru)
         init_layer(self.fc)
 
     def forward(self, input):
@@ -145,7 +134,7 @@ class AcousticModelCRnn8Dropout(nn.Module):
         Outputs:
           output: (batch_size, time_steps, classes_num)
         """
-        # print(input.shape)
+
         x = self.conv_block1(input, pool_size=(1, 2), pool_type='avg')
         x = F.dropout(x, p=0.2, training=self.training)
         x = self.conv_block2(x, pool_size=(1, 2), pool_type='avg')
@@ -155,22 +144,11 @@ class AcousticModelCRnn8Dropout(nn.Module):
         x = self.conv_block4(x, pool_size=(1, 2), pool_type='avg')
         x = F.dropout(x, p=0.2, training=self.training)
 
-        # print(x.shape)
-        x = x.flatten(2)
-        x = x.transpose(1, 2)
-        # x = F.relu(self.bn5(self.fc5(x).transpose(1, 2)).transpose(1, 2))
-        x = F.dropout(x, p=0.5, training=self.training, inplace=True)
-
-        # print('x', x.shape)
-        
-        x = self.attn(x)
-        # print("post attn, ", x.shape)
-        x = x.transpose(1,2)
-        x = torch.reshape(x, (x.shape[0], x.shape[1], 251, 14))
-        # print("post stuff", x.shape)
         x = x.transpose(1, 2).flatten(2)
-        # print("pre fc", x.shape)
         x = F.relu(self.bn5(self.fc5(x).transpose(1, 2)).transpose(1, 2))
+        x = F.dropout(x, p=0.5, training=self.training, inplace=True)
+        
+        (x, _) = self.gru(x)
         x = F.dropout(x, p=0.5, training=self.training, inplace=False)
         output = torch.sigmoid(self.fc(x))
         return output
