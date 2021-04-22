@@ -16,7 +16,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-
+from utilities import (create_folder, get_filename, RegressionPostProcessor, 
+    OnsetsFramesPostProcessor, write_events_to_midi, load_audio)
 from utilities import (create_folder, get_filename, create_logging, 
     StatisticsContainer, RegressionPostProcessor) 
 from data_generator import MaestroDataset, Augmentor, Sampler, TestSampler, collate_fn
@@ -153,9 +154,9 @@ def train(args):
         split='train', segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
         batch_size=batch_size, mini_data=mini_data)
 
-    # evaluate_validate_sampler = TestSampler(hdf5s_dir=hdf5s_dir, 
-    #     split='validation', segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
-    #     batch_size=batch_size, mini_data=mini_data)
+    evaluate_validate_sampler = TestSampler(hdf5s_dir=hdf5s_dir, 
+        split='validation', segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
+        batch_size=batch_size, mini_data=mini_data)
 
     evaluate_test_sampler = TestSampler(hdf5s_dir=hdf5s_dir, 
         split='test', segment_seconds=segment_seconds, hop_seconds=hop_seconds, 
@@ -170,9 +171,9 @@ def train(args):
         batch_sampler=evaluate_train_sampler, collate_fn=collate_fn, 
         num_workers=num_workers, pin_memory=True)
 
-    # validate_loader = torch.utils.data.DataLoader(dataset=evaluate_dataset, 
-    #     batch_sampler=evaluate_validate_sampler, collate_fn=collate_fn, 
-    #     num_workers=num_workers, pin_memory=True)
+    validate_loader = torch.utils.data.DataLoader(dataset=evaluate_dataset, 
+        batch_sampler=evaluate_validate_sampler, collate_fn=collate_fn, 
+        num_workers=num_workers, pin_memory=True)
 
     test_loader = torch.utils.data.DataLoader(dataset=evaluate_dataset, 
         batch_sampler=evaluate_test_sampler, collate_fn=collate_fn, 
@@ -216,127 +217,32 @@ def train(args):
 
     train_bgn_time = time.time()
 
-    for batch_data_dict in train_loader:    
-    
-        # Evaluation 
-        if iteration % 5000 == 0:# and iteration > 0:
-            logging.info('------------------------------------')
-            logging.info('Iteration: {}'.format(iteration))
-
-            train_fin_time = time.time()
-
-            evaluate_train_statistics = evaluator.evaluate(evaluate_train_loader)
-            # validate_statistics = evaluator.evaluate(validate_loader)
-            test_statistics = evaluator.evaluate(test_loader)
-
-            logging.info('    Train statistics: {}'.format(evaluate_train_statistics))
-            # logging.info('    Validation statistics: {}'.format(validate_statistics))
-            logging.info('    Test statistics: {}'.format(test_statistics))
-
-            statistics_container.append(iteration, evaluate_train_statistics, data_type='train')
-            # statistics_container.append(iteration, validate_statistics, data_type='validation')
-            statistics_container.append(iteration, test_statistics, data_type='test')
-            statistics_container.dump()
-
-            train_time = train_fin_time - train_bgn_time
-            # validate_time = time.time() - train_fin_time
-
-            logging.info(
-                'Train time: {:.3f} s'
-                ''.format(train_time))
-
-            train_bgn_time = time.time()
-            
-            # val_frame.append(validate_statistics['frame_ap'])
-            # val_reg_onset.append(validate_statistics['reg_onset_mae'])
-            # val_reg_offset.append(validate_statistics['reg_offset_mae'])
-            
-            train_frame.append(evaluate_train_statistics['frame_ap'])
-            train_reg_onset.append(evaluate_train_statistics['reg_onset_mae'])
-            train_reg_offset.append(evaluate_train_statistics['reg_offset_mae'])
-        
-        # Save model
-        if iteration % 1000 == 0:
-            checkpoint = {
-                'iteration': iteration, 
-                'model': model.module.state_dict(), 
-                'sampler': train_sampler.state_dict()}
-
-            checkpoint_path = os.path.join(
-                checkpoints_dir, '{}_iterations.pth'.format(iteration))
-                
-            torch.save(checkpoint, checkpoint_path)
-            logging.info('Model saved to {}'.format(checkpoint_path))
-        
-        # Reduce learning rate
-        if iteration % reduce_iteration == 0 and iteration > 0:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] *= 0.9
+    for batch_data_dict in train_loader:
         
         # Move data to device
         for key in batch_data_dict.keys():
             batch_data_dict[key] = move_data_to_device(batch_data_dict[key], device)
         
-        model.train()
-        batch_output_dict = model(batch_data_dict['waveform'])
+        post_processor = RegressionPostProcessor(50, 
+                classes_num=88, onset_threshold=0.3, 
+                offset_threshold=0.3, 
+                frame_threshold=0.1, 
+                pedal_offset_threshold=0.1)
+        print(batch_data_dict.keys())
+        batch_data_dict["onset_output"] = batch_data_dict["onset_roll"].squeeze(0)
+        batch_data_dict["onset_output"] = batch_data_dict["onset_roll"].squeeze(0)
+        batch_data_dict["frame_output"] = batch_data_dict["frame_roll"].squeeze(0)
+        batch_data_dict["reg_onset_output"] = batch_data_dict["reg_onset_roll"].squeeze(0)
+        # print(batch_data_dict["onset_output"].shape)
+        batch_data_dict["reg_offset_output"] = batch_data_dict["reg_offset_roll"].squeeze(0)
 
-        loss = loss_func(model, batch_output_dict, batch_data_dict)
-
-        # Backward
-        loss.backward()
+        (est_note_events, est_pedal_events) = \
+            post_processor.output_dict_to_midi_events(batch_data_dict)
+        write_events_to_midi(start_time=0, note_events=est_note_events, 
+                pedal_events=est_pedal_events, midi_path='/content/drive/MyDrive/532Project/MelTraining/{}.mid'.format(iteration))
         
-        losses.append(loss.item())
-
-        if iteration % 1000 == 0:
-            #print(loss, iteration, "LOSS")
-            axs[0].plot(losses)
-            axs[0].set_yscale('log')
-            axs[0].set_xlabel("losses")
-            # clear output window and diplay updated figure
-            axs[1].plot(val_frame)
-            axs[1].set_yscale('log')
-            axs[1].set_xlabel("val_frame")
-            
-            axs[2].plot(val_reg_onset)
-            axs[2].set_yscale('log')
-            axs[2].set_xlabel("val_reg_onset")
-            # clear output window and diplay updated figure
-            axs[3].plot(val_reg_offset)
-            axs[3].set_yscale('log')
-            axs[3].set_xlabel("val_reg_offset")  
-        
-            axs[4].plot(train_frame)
-            axs[4].set_yscale('log')
-            axs[4].set_xlabel("train_frame") 
-            # clear output window and diplay updated figure
-            axs[5].plot(train_reg_onset)
-            axs[5].set_yscale('log')
-            axs[5].set_xlabel("train_reg_onset")   
-            # clear output window and diplay updated figure
-            axs[6].plot(train_reg_offset)
-            axs[6].set_yscale('log')
-            axs[6].set_xlabel("train_reg_offset")  
-            
-            plt.savefig('/content/drive/MyDrive/532Project/MelTraining/musicnetorig/Attention_Gru.png')
-            fileData = open("/content/drive/MyDrive/532Project/MelTraining/musicnetorig/AttentionGru.txt","a+") 
-            fileData.writelines([str(loss.item()), " ", str(iteration)])
-            fileData.write("\n")
-            fileData.close()
-            #plt.show()
-        
-        if iteration % 100 == 0:
-            print(loss, iteration, "LOSS")
-        
-        if iteration % 2 != 0:
-            optimizer.step()
-            optimizer.zero_grad()
-        
-        # Stop learning
-        if iteration == early_stop:
-            break
-
         iteration += 1
-        # print("iteration", iteration)
+
 
 
 if __name__ == '__main__':

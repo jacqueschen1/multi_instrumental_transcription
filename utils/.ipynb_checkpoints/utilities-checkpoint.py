@@ -306,14 +306,14 @@ class TargetProcessor(object):
             # Note
             if attribute_list[0] in ['note_on', 'note_off']:
                 """E.g. attribute_list: ['note_on', 'channel=0', 'note=41', 'velocity=0', 'time=10']"""
-                midi_note = int(attribute_list[1].split('=')[1])
-                # velocity = int(attribute_list[3].split('=')[1])
+                midi_note = int(attribute_list[2].split('=')[1])
+                velocity = int(attribute_list[3].split('=')[1])
 
                 # Onset
-                if attribute_list[0] == 'note_on':
+                if attribute_list[0] == 'note_on' and velocity > 0:
                     buffer_dict[midi_note] = {
                         'onset_time': midi_events_time[i], 
-                        }
+                        'velocity': velocity}
 
                 # Offset
                 else:
@@ -321,41 +321,43 @@ class TargetProcessor(object):
                         note_events.append({
                             'midi_note': midi_note, 
                             'onset_time': buffer_dict[midi_note]['onset_time'], 
-                            'offset_time': midi_events_time[i]})
+                            'offset_time': midi_events_time[i], 
+                            'velocity': buffer_dict[midi_note]['velocity']})
                         del buffer_dict[midi_note]
 
             # Pedal
-            # elif attribute_list[0] == 'control_change' and attribute_list[2] == 'control=64':
-            #     """control=64 corresponds to pedal MIDI event. E.g. 
-            #     attribute_list: ['control_change', 'channel=0', 'control=64', 'value=45', 'time=43']"""
+            elif attribute_list[0] == 'control_change' and attribute_list[2] == 'control=64':
+                """control=64 corresponds to pedal MIDI event. E.g. 
+                attribute_list: ['control_change', 'channel=0', 'control=64', 'value=45', 'time=43']"""
 
-            #     ped_value = int(attribute_list[3].split('=')[1])
-            #     if ped_value >= 64:
-            #         if 'onset_time' not in pedal_dict:
-            #             pedal_dict['onset_time'] = midi_events_time[i]
-            #     else:
-            #         if 'onset_time' in pedal_dict:
-            #             pedal_events.append({
-            #                 'onset_time': pedal_dict['onset_time'], 
-            #                 'offset_time': midi_events_time[i]})
-            #             pedal_dict = {}
+                ped_value = int(attribute_list[3].split('=')[1])
+                if ped_value >= 64:
+                    if 'onset_time' not in pedal_dict:
+                        pedal_dict['onset_time'] = midi_events_time[i]
+                else:
+                    if 'onset_time' in pedal_dict:
+                        pedal_events.append({
+                            'onset_time': pedal_dict['onset_time'], 
+                            'offset_time': midi_events_time[i]})
+                        pedal_dict = {}
 
         # Add unpaired onsets to events
         for midi_note in buffer_dict.keys():
             note_events.append({
                 'midi_note': midi_note, 
                 'onset_time': buffer_dict[midi_note]['onset_time'], 
+                'offset_time': start_time + self.segment_seconds, 
+                'velocity': buffer_dict[midi_note]['velocity']})
+
+        # Add unpaired pedal onsets to data
+        if 'onset_time' in pedal_dict.keys():
+            pedal_events.append({
+                'onset_time': pedal_dict['onset_time'], 
                 'offset_time': start_time + self.segment_seconds})
 
-        # # Add unpaired pedal onsets to data
-        # if 'onset_time' in pedal_dict.keys():
-        #     pedal_events.append({
-        #         'onset_time': pedal_dict['onset_time'], 
-        #         'offset_time': start_time + self.segment_seconds})
-
-        # # Set notes to ON until pedal is released
-        # if extend_pedal:
-        #     note_events = self.extend_pedal(note_events, pedal_events)
+        # Set notes to ON until pedal is released
+        if extend_pedal:
+            note_events = self.extend_pedal(note_events, pedal_events)
         
         # Prepare targets
         frames_num = int(round(self.segment_seconds * self.frames_per_second)) + 1
@@ -364,7 +366,7 @@ class TargetProcessor(object):
         reg_onset_roll = np.ones((frames_num, self.classes_num))
         reg_offset_roll = np.ones((frames_num, self.classes_num))
         frame_roll = np.zeros((frames_num, self.classes_num))
-        # velocity_roll = np.zeros((frames_num, self.classes_num))
+        velocity_roll = np.zeros((frames_num, self.classes_num))
         mask_roll = np.ones((frames_num, self.classes_num))
         """mask_roll is used for masking out cross segment notes"""
 
@@ -390,7 +392,7 @@ class TargetProcessor(object):
                     frame_roll[max(bgn_frame, 0) : fin_frame + 1, piano_note] = 1
 
                     offset_roll[fin_frame, piano_note] = 1
-                    # velocity_roll[max(bgn_frame, 0) : fin_frame + 1, piano_note] = note_event['velocity']
+                    velocity_roll[max(bgn_frame, 0) : fin_frame + 1, piano_note] = note_event['velocity']
 
                     # Vector from the center of a frame to ground truth offset
                     reg_offset_roll[fin_frame, piano_note] = \
@@ -444,7 +446,7 @@ class TargetProcessor(object):
         target_dict = {
             'onset_roll': onset_roll, 'offset_roll': offset_roll,
             'reg_onset_roll': reg_onset_roll, 'reg_offset_roll': reg_offset_roll,
-            'frame_roll': frame_roll, 
+            'frame_roll': frame_roll, 'velocity_roll': velocity_roll, 
             'mask_roll': mask_roll, 'reg_pedal_onset_roll': reg_pedal_onset_roll, 
             'pedal_onset_roll': pedal_onset_roll, 'pedal_offset_roll': pedal_offset_roll, 
             'reg_pedal_offset_roll': reg_pedal_offset_roll, 'pedal_frame_roll': pedal_frame_roll
