@@ -15,3 +15,5 @@ pip install -r requirements.txt
 ```
 
 We trained on the MusicNet dataset for the multi-instrumental model and on the MAESTRO  datset for the piano model.
+
+Some additional code for self-attention blocks was adapted from https://github.com/sahajgarg/image_transformer
