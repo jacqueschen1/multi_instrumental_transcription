@@ -1,9 +1,10 @@
 
 # Multi-instrument transcription
 
-Music transcription is the task of transcribing piano recordings into MIDI files. This repo was forked from https://github.com/qiuqiangkong/piano_transcription_inference and has the code and trained models for our UBC CPSC 532S Deep learning course research project!
+Music transcription is the task of transcribing piano recordings into MIDI files. This repo was forked from https://github.com/qiuqiangkong/piano_transcription_inference and has the code and trained models for our research project for UBC CPSC 532S deep learning course!
 
-All details available in our report, available in this `project_report` folder.
+All details available in our report, available in this `project_report` folder. 
+
 Demos: Coming soon
 
 Some MIDI output examples available in the `sample_results` folder.
